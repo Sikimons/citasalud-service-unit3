@@ -1,0 +1,193 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.openapi.generator' version '7.9.0'
+    id 'jacoco'
+}
+
+group = 'org.ups'
+version = '0.0.1-SNAPSHOT'
+description = 'citasalud-service'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(26)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-h2console'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+
+    // Database & migrations
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.postgresql:postgresql'
+    runtimeOnly 'com.h2database:h2'
+
+    // Validation
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Actuator — /actuator/health for 24/7 availability monitoring (FR-006)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // OpenAPI generated code dependencies
+    implementation 'io.swagger.core.v3:swagger-annotations:2.2.22'
+    implementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+
+    // Utilities
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'io.cucumber:cucumber-java:7.20.1'
+    testImplementation 'io.cucumber:cucumber-spring:7.20.1'
+    testImplementation 'io.cucumber:cucumber-junit-platform-engine:7.20.1'
+    testImplementation 'org.junit.platform:junit-platform-suite'
+    testCompileOnly 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+// ── OpenAPI Generator (T003) ────────────────────────────────────────────────
+openApiGenerate {
+    generatorName = "spring"
+    inputSpec = "$rootDir/src/main/resources/openapi/citasalud-api.yml"
+    outputDir = "$buildDir/generated"
+    apiPackage = "org.ups.citasaludservice.adapter.in.web.api"
+    modelPackage = "org.ups.citasaludservice.adapter.in.web.api.model"
+    configOptions = [
+        interfaceOnly     : "true",
+        useSpringBoot3    : "true",
+        useTags           : "true",
+        openApiNullable   : "false",
+        useOptional       : "false"
+    ]
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir "$buildDir/generated/src/main/java"
+        }
+    }
+}
+
+compileJava.dependsOn tasks.openApiGenerate
+
+// ── JaCoCo (T004) ────────────────────────────────────────────────────────────
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    jacoco {
+        // Avoid instrumenting JDK and runtime-generated classes that JaCoCo
+        // cannot parse correctly under the current JVM.
+        includeNoLocationClasses = false
+        excludes = [
+            'java.*',
+            'javax.*',
+            'jdk.*',
+            'sun.*',
+            'com.sun.*',
+            'org.jcp.xml.*',
+            'net.bytebuddy.*',
+            'org.mockito.*',
+            '*$HibernateProxy*',
+            '*$HibernateInstantiator*',
+            '*$MockitoMock$*',
+            '*$MockitoMock$*$*'
+        ]
+    }
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        html.required = true
+        xml.required = true
+    }
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                'org/ups/citasaludservice/adapter/in/web/api/**',
+                'org/ups/citasaludservice/adapter/in/web/mapper/**',
+                'org/ups/citasaludservice/adapter/out/persistence/entity/**',
+                'org/ups/citasaludservice/adapter/out/persistence/mapper/**',
+                'org/ups/citasaludservice/adapter/out/notification/**',
+                'org/ups/citasaludservice/infrastructure/**',
+                'org/ups/citasaludservice/domain/model/Notificacion.class',
+                'org/ups/citasaludservice/domain/model/EstadoEnvio.class',
+                'org/ups/citasaludservice/domain/model/TipoNotificacion.class',
+                'org/ups/citasaludservice/CitasaludServiceApplication.class'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn test
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                'org/ups/citasaludservice/adapter/in/web/api/**',
+                'org/ups/citasaludservice/adapter/in/web/mapper/**',
+                'org/ups/citasaludservice/adapter/out/persistence/entity/**',
+                'org/ups/citasaludservice/adapter/out/persistence/mapper/**',
+                'org/ups/citasaludservice/adapter/out/notification/**',
+                'org/ups/citasaludservice/infrastructure/**',
+                'org/ups/citasaludservice/domain/model/Notificacion.class',
+                'org/ups/citasaludservice/domain/model/EstadoEnvio.class',
+                'org/ups/citasaludservice/domain/model/TipoNotificacion.class',
+                'org/ups/citasaludservice/CitasaludServiceApplication.class'
+            ])
+        }))
+    }
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80
+            }
+        }
+        rule {
+            element = 'CLASS'
+            excludes = [
+                'org.ups.citasaludservice.adapter.in.web.api.*',
+                'org.ups.citasaludservice.adapter.in.web.api.model.*',
+                'org.ups.citasaludservice.infrastructure.*',
+                'org.ups.citasaludservice.CitasaludServiceApplication',
+                // JPA entity boilerplate (getters/setters, no business logic)
+                'org.ups.citasaludservice.adapter.out.persistence.entity.*',
+                // Mapper boilerplate (pure field-to-field transformations)
+                'org.ups.citasaludservice.adapter.out.persistence.mapper.*',
+                'org.ups.citasaludservice.adapter.in.web.mapper.*',
+                // Async notification stub (no business logic to test)
+                'org.ups.citasaludservice.adapter.out.notification.*',
+                // Domain notification record and enums (value objects, tested via integration)
+                'org.ups.citasaludservice.domain.model.Notificacion',
+                'org.ups.citasaludservice.domain.model.EstadoEnvio',
+                'org.ups.citasaludservice.domain.model.TipoNotificacion'
+            ]
+            limit {
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
